@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, Plus, UserPlus, Users } from "lucide-react";
+import { Check, Loader2, Plus, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/dang/format";
-import { useDangStore } from "@/lib/dang/store";
+import { useDang } from "@/lib/dang/store";
 import { MAX_AMOUNT, type SplitType } from "@/lib/dang/types";
 import { MoneyInput } from "./money-input";
 
@@ -31,8 +31,8 @@ interface ExpenseFormProps {
 }
 
 export function ExpenseForm({ onGoToMembers }: ExpenseFormProps) {
-  const members = useDangStore((s) => s.members);
-  const addExpense = useDangStore((s) => s.addExpense);
+  const { members, addExpense } = useDang();
+  const [submitting, setSubmitting] = useState(false);
 
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState<number | null>(null);
@@ -85,33 +85,39 @@ export function ExpenseForm({ onGoToMembers }: ExpenseFormProps) {
     if (!selected.includes(id)) setRawSelected([...selected, id]);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (amount === null) {
       toast.error("مبلغ هزینه رو وارد کن.");
       return;
     }
-    const res = addExpense({
-      title,
-      amount,
-      payerId,
-      participantIds: selected,
-      splitType,
-      customShares:
-        splitType === "custom"
-          ? Object.fromEntries(
-              selectedMembers.map((m) => [m.id, customShares[m.id] ?? 0])
-            )
-          : undefined,
-    });
-    if (!res.ok) {
-      toast.error(res.error);
-      return;
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await addExpense({
+        title,
+        amount,
+        payerId,
+        participantIds: selected,
+        splitType,
+        customShares:
+          splitType === "custom"
+            ? Object.fromEntries(
+                selectedMembers.map((m) => [m.id, customShares[m.id] ?? 0])
+              )
+            : undefined,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("هزینه ثبت شد.");
+      setTitle("");
+      setAmount(null);
+      setCustomShares({});
+    } finally {
+      setSubmitting(false);
     }
-    toast.success("هزینه ثبت شد.");
-    setTitle("");
-    setAmount(null);
-    setCustomShares({});
   }
 
   if (members.length === 0) {
@@ -318,10 +324,14 @@ export function ExpenseForm({ onGoToMembers }: ExpenseFormProps) {
           <div>
             <Button
               type="submit"
-              disabled={amount !== null && amount > MAX_AMOUNT}
+              disabled={submitting || (amount !== null && amount > MAX_AMOUNT)}
             >
-              <Plus className="size-4" />
-              ثبت هزینه
+              {submitting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
+              {submitting ? "در حال ثبت…" : "ثبت هزینه"}
             </Button>
           </div>
         </CardContent>

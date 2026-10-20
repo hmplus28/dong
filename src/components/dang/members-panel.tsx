@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import {
   DatabaseBackup,
   Download,
+  Loader2,
   Trash2,
   Upload,
   UserPlus,
@@ -37,7 +38,7 @@ import {
 } from "@/lib/dang/backup";
 import type { MemberBalance } from "@/lib/dang/types";
 import { formatJalaliDate, formatMoney } from "@/lib/dang/format";
-import { useDangStore } from "@/lib/dang/store";
+import { useDang } from "@/lib/dang/store";
 import { normalizeName } from "@/lib/dang/utils";
 
 interface MembersPanelProps {
@@ -45,28 +46,39 @@ interface MembersPanelProps {
 }
 
 export function MembersPanel({ balances }: MembersPanelProps) {
-  const members = useDangStore((s) => s.members);
-  const expenses = useDangStore((s) => s.expenses);
-  const addMember = useDangStore((s) => s.addMember);
-  const removeMember = useDangStore((s) => s.removeMember);
-  const replaceAll = useDangStore((s) => s.replaceAll);
-  const resetAll = useDangStore((s) => s.resetAll);
+  const {
+    members,
+    expenses,
+    addMember,
+    removeMember,
+    replaceAll,
+    resetAll,
+  } = useDang();
 
   const [name, setName] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [pendingImport, setPendingImport] = useState<BackupFile | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const hasData = members.length > 0 || expenses.length > 0;
 
-  function handleAddMember(e: FormEvent) {
+  async function handleAddMember(e: FormEvent) {
     e.preventDefault();
-    const res = addMember(name);
-    if (!res.ok) {
-      toast.error(res.error);
-      return;
+    if (adding) return;
+    setAdding(true);
+    try {
+      const res = await addMember(name);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`«${normalizeName(name)}» اضافه شد.`);
+      setName("");
+    } finally {
+      setAdding(false);
     }
-    toast.success(`«${normalizeName(name)}» اضافه شد.`);
-    setName("");
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -87,15 +99,27 @@ export function MembersPanel({ balances }: MembersPanelProps) {
     }
   }
 
-  function applyImport() {
-    if (!pendingImport) return;
-    replaceAll(pendingImport.members, pendingImport.expenses);
-    toast.success(
-      `بازیابی شد: ${formatMoney(
-        pendingImport.members.length
-      )} عضو و ${formatMoney(pendingImport.expenses.length)} هزینه.`
-    );
-    setPendingImport(null);
+  async function applyImport() {
+    if (!pendingImport || importing) return;
+    setImporting(true);
+    try {
+      const res = await replaceAll(
+        pendingImport.members,
+        pendingImport.expenses
+      );
+      if (res.ok) {
+        toast.success(
+          `بازیابی شد: ${formatMoney(
+            pendingImport.members.length
+          )} عضو و ${formatMoney(pendingImport.expenses.length)} هزینه.`
+        );
+        setPendingImport(null);
+      } else {
+        toast.error(res.error);
+      }
+    } finally {
+      setImporting(false);
+    }
   }
 
   return (
@@ -133,9 +157,13 @@ export function MembersPanel({ balances }: MembersPanelProps) {
                 maxLength={40}
               />
             </div>
-            <Button type="submit">
-              <UserPlus className="size-4" />
-              اضافه کن
+            <Button type="submit" disabled={adding}>
+              {adding ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <UserPlus className="size-4" />
+              )}
+              {adding ? "در حال افزودن…" : "اضافه کن"}
             </Button>
           </CardContent>
         </form>
@@ -192,10 +220,10 @@ export function MembersPanel({ balances }: MembersPanelProps) {
                               نه، دست نگه‌دار
                             </AlertDialogCancel>
                             <AlertDialogAction
-                              onClick={() => {
-                                const res = removeMember(m.id);
-                                if (!res.ok) toast.error(res.error);
-                                else toast.success(`«${m.name}» حذف شد.`);
+                              onClick={async () => {
+                                const res = await removeMember(m.id);
+                                if (res.ok) toast.success(`«${m.name}» حذف شد.`);
+                                else toast.error(res.error);
                               }}
                               className="bg-destructive text-white hover:bg-destructive/90"
                             >
@@ -260,9 +288,9 @@ export function MembersPanel({ balances }: MembersPanelProps) {
             <p className="font-semibold">پشتیبان‌گیری و انتقال داده‌ها</p>
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            اطلاعات فقط روی مرورگر خودت ذخیره می‌شه (بدون سرور و لاگین). برای
-            برداشتنشون رو گوشی یا سیستم دیگه، فایل پشتیبان بگیر و اون‌جا
-            بازیابی کن.
+            اطلاعات روی سرور ذخیره می‌شن و از هر مرورگری قابل دسترسی‌ان. با
+            پشتیبان‌گیری می‌تونی یه کپی امن ازشون داشته باشی یا روی نصب دیگه‌ای
+            بازیابیشون کنی.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -296,19 +324,29 @@ export function MembersPanel({ balances }: MembersPanelProps) {
                 <AlertDialogHeader>
                   <AlertDialogTitle>پاک کردن همه داده‌ها</AlertDialogTitle>
                   <AlertDialogDescription>
-                    همه اعضا و هزینه‌ها برای همیشه پاک می‌شن. قبلش یه فایل
-                    پشتیبان بگیر شاید پشیمون شدی!
+                    همه اعضا و هزینه‌ها برای همیشه از روی سرور پاک می‌شن.
+                    قبلش یه فایل پشتیبان بگیر شاید پشیمون شدی!
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>نه، دست نگه‌دار</AlertDialogCancel>
                   <AlertDialogAction
-                    onClick={() => {
-                      resetAll();
-                      toast.success("همه داده‌ها پاک شد.");
+                    onClick={async () => {
+                      if (resetting) return;
+                      setResetting(true);
+                      try {
+                        const res = await resetAll();
+                        if (res.ok) toast.success("همه داده‌ها پاک شد.");
+                        else toast.error(res.error);
+                      } finally {
+                        setResetting(false);
+                      }
                     }}
                     className="bg-destructive text-white hover:bg-destructive/90"
                   >
+                    {resetting ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : null}
                     آره، همه‌چیز پاک بشه
                   </AlertDialogAction>
                 </AlertDialogFooter>
@@ -346,8 +384,13 @@ export function MembersPanel({ balances }: MembersPanelProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>نه، بی‌خیال</AlertDialogCancel>
-            <AlertDialogAction onClick={applyImport}>
+            <AlertDialogCancel disabled={importing}>
+              نه، بی‌خیال
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={applyImport} disabled={importing}>
+              {importing ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : null}
               آره، بازیابی کن
             </AlertDialogAction>
           </AlertDialogFooter>

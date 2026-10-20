@@ -1,6 +1,11 @@
 [build]
-  command = "npm run build"
-  publish = "out"
+  # آماده‌سازی دیتابیس (سوئیچ خودکار provider بر اساس DATABASE_URL) + بیلد Next.js
+  command = "node scripts/setup-db.mjs && npm run build"
+  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "22"
+
+# پلاگین رسمی نتلیفای برای Next.js — SSR و API Routes رو به Netlify Functions تبدیل می‌کنه
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

@@ -3,12 +3,26 @@
 import { useMemo, useState } from "react";
 import {
   ArrowLeftRight,
+  CloudUpload,
   HandCoins,
+  Loader2,
   ReceiptText,
   Users,
 } from "lucide-react";
+import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tabs,
@@ -17,7 +31,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { computeBalances, computeTransfers } from "@/lib/dang/settlement";
-import { useDangHydrated, useDangStore } from "@/lib/dang/store";
+import { useDang } from "@/lib/dang/store";
 import { formatMoney } from "@/lib/dang/format";
 import { ExpenseForm } from "./expense-form";
 import { ExpenseList } from "./expense-list";
@@ -29,17 +43,22 @@ import { ThemeToggle } from "./theme-toggle";
 type TabKey = "expenses" | "members" | "settlement";
 
 export function DangApp() {
-  const members = useDangStore((s) => s.members);
-  const expenses = useDangStore((s) => s.expenses);
-  const hydrated = useDangHydrated();
+  const {
+    members,
+    expenses,
+    loading,
+    legacyData,
+    importLegacy,
+    dismissLegacy,
+  } = useDang();
 
   const [tab, setTab] = useState<TabKey>("expenses");
-  const [wasHydrated, setWasHydrated] = useState(false);
+  const [wasLoaded, setWasLoaded] = useState(false);
 
-  // الگوی رسمی React برای تنظیم state هنگام render (فقط بار اول بعد از hydration):
+  // الگوی رسمی React برای تنظیم state هنگام render (فقط بار اول بعد از لود):
   // اگه هنوز عضوی تعریف نشده، مستقیم برو سراغ تب اعضا
-  if (hydrated && !wasHydrated) {
-    setWasHydrated(true);
+  if (!loading && !wasLoaded) {
+    setWasLoaded(true);
     if (members.length === 0) setTab("members");
   }
 
@@ -74,7 +93,7 @@ export function DangApp() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {hydrated && expenses.length > 0 && (
+            {!loading && expenses.length > 0 && (
               <div className="hidden flex-col items-end leading-tight sm:flex">
                 <span className="text-[11px] text-muted-foreground">
                   جمع هزینه‌ها
@@ -93,7 +112,7 @@ export function DangApp() {
       </header>
 
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 pb-10 pt-6">
-        {!hydrated ? (
+        {loading ? (
           <div className="flex flex-col gap-6" aria-busy="true">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -177,10 +196,80 @@ export function DangApp() {
 
       <footer className="mt-auto border-t bg-background">
         <div className="mx-auto w-full max-w-4xl px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-xs leading-relaxed text-muted-foreground">
-          دنگ‌حساب — همه داده‌ها فقط روی مرورگر خودت ذخیره می‌شه؛ برای منتقل‌کردنشون
-          از پشتیبان‌گیری استفاده کن.
+          دنگ‌حساب — داده‌ها روی سرور ذخیره می‌شن و از هر مرورگری در دسترسن.
         </div>
       </footer>
+
+      <LegacyMigrationDialog
+        open={!loading && members.length === 0 && legacyData !== null}
+        legacyData={legacyData}
+        onImport={importLegacy}
+        onDismiss={dismissLegacy}
+      />
     </div>
+  );
+}
+
+/** پیشنهاد انتقال داده‌های قدیمی (نسخه‌ی مرورگری) به سرور */
+function LegacyMigrationDialog({
+  open,
+  legacyData,
+  onImport,
+  onDismiss,
+}: {
+  open: boolean;
+  legacyData: { members: unknown[]; expenses: unknown[] } | null;
+  onImport: () => Promise<{ ok: boolean; error?: string }>;
+  onDismiss: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  async function handleImport() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await onImport();
+      if (res.ok) {
+        toast.success("داده‌های قدیمی با موفقیت به سرور منتقل شد.");
+      } else {
+        toast.error(res.error ?? "انتقال انجام نشد.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!legacyData) return null;
+
+  return (
+    <AlertDialog open={open}>
+      <AlertDialogContent dir="rtl">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <CloudUpload className="size-5 text-primary" />
+            انتقال داده‌های قدیمی به سرور
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            توی این مرورگر {formatMoney(legacyData.members.length)} عضو و{" "}
+            {formatMoney(legacyData.expenses.length)} هزینه از نسخه‌ی قبلی
+            دنگ‌حساب (که فقط روی مرورگر ذخیره می‌شد) پیدا شد. الان همه‌چیز روی
+            سرور ذخیره می‌شه؛ می‌خوای این داده‌ها منتقل بشن؟
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onDismiss} disabled={busy}>
+            بی‌خیال
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={handleImport} disabled={busy}>
+            {busy ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <CloudUpload className="size-4" />
+            )}
+            منتقل کن
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

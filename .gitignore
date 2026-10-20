@@ -52,3 +52,19 @@ prompt
 server.log
 # Skills directory
 /skills/
+# database (فقط فایل‌های دیتابیس؛ .gitkeep برای وجود پوشه می‌مونه)
+db/*
+!db/.gitkeep
+*.db
+*.db-journal
+
+# لاگ‌ها و فایل‌های داخلی
+dev.log
+dev.out.log
+server.log
+worklog.md
+agent-ctx/
+
+# دموهای غیرمرتبط سکافولد
+/mini-services/
+/examples/

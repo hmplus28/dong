@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ReceiptText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,12 +20,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatJalaliDate, formatMoney } from "@/lib/dang/format";
-import { useDangStore } from "@/lib/dang/store";
+import { useDang } from "@/lib/dang/store";
 
 export function ExpenseList() {
-  const members = useDangStore((s) => s.members);
-  const expenses = useDangStore((s) => s.expenses);
-  const removeExpense = useDangStore((s) => s.removeExpense);
+  const { members, expenses, removeExpense } = useDang();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const nameOf = useMemo(() => {
     const map = new Map(members.map((m) => [m.id, m.name]));
@@ -37,9 +36,19 @@ export function ExpenseList() {
     [expenses]
   );
 
-  function handleDelete(id: string, title: string) {
-    removeExpense(id);
-    toast.success(`«${title}» حذف شد و حساب‌ها دوباره محاسبه شدن.`);
+  async function handleDelete(id: string, title: string) {
+    if (deletingId) return;
+    setDeletingId(id);
+    try {
+      const res = await removeExpense(id);
+      if (res.ok) {
+        toast.success(`«${title}» حذف شد و حساب‌ها دوباره محاسبه شدن.`);
+      } else {
+        toast.error(res.error);
+      }
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   if (sorted.length === 0) {
