@@ -32,6 +32,8 @@ interface DangContextValue {
   expenses: Expense[];
   /** بار اول در حال دریافت از سرور است */
   loading: boolean;
+  /** اگه دریافت داده‌ها از سرور شکست خورده باشه، پیام فارسی خطا */
+  loadError: string | null;
   reload: () => Promise<void>;
   addMember: (rawName: string) => Promise<Result>;
   removeMember: (id: string) => Promise<Result>;
@@ -115,11 +117,18 @@ export function DangProvider({ children }: { children: React.ReactNode }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [legacyData, setLegacyData] = useState<BackupFile | null>(null);
 
   const reload = useCallback(async () => {
     const { status, body } = await requestJson("/api/dang");
-    if (status !== 200) return;
+    if (status !== 200) {
+      setLoadError(
+        errorOf(body, "دریافت داده‌ها از سرور ممکن نشد.")
+      );
+      return;
+    }
+    setLoadError(null);
     setMembers(Array.isArray(body.members) ? (body.members as Member[]) : []);
     setExpenses(
       Array.isArray(body.expenses) ? (body.expenses as Expense[]) : []
@@ -255,6 +264,7 @@ export function DangProvider({ children }: { children: React.ReactNode }) {
       members,
       expenses,
       loading,
+      loadError,
       reload,
       addMember,
       removeMember,
@@ -270,6 +280,7 @@ export function DangProvider({ children }: { children: React.ReactNode }) {
       members,
       expenses,
       loading,
+      loadError,
       reload,
       addMember,
       removeMember,

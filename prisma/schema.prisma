@@ -1,11 +1,13 @@
 // دنگ‌حساب — اسکیمای دیتابیس
 // داده‌ها روی سرور ذخیره می‌شن (نه مرورگر).
-// لوکال: SQLite | پروداکشن (نتلیفای): PostgreSQL — اسکریپت scripts/setup-db.mjs
+// لوکال: SQLite | نتلیفای بدون تنظیم: Netlify Blobs (بدون Prisma)
+// | نتلیفای با DATABASE_URL: PostgreSQL — اسکریپت scripts/setup-db.mjs
 // بر اساس DATABASE_URL به‌طور خودکار provider را عوض می‌کند.
 
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
+  // native: لوکال | debian/rhel-openssl-3.0.x: توابع سرورلس نتلیفای (Amazon Linux 2023)
+  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x"]
 }
 
 datasource db {

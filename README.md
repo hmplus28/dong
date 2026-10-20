@@ -9,9 +9,9 @@
 - ⚖️ **دو حالت تقسیم:** مساوی بین سهیم‌ها، یا مبالغ دلخواه هر نفر
 - 🎯 **محاسبه‌ی دقیق:** همه‌ی محاسبات با عدد صحیح تومانی انجام می‌شه (هیچ float یا خطای گرد‌کردنی وسط نیست)
 - 💸 **تسویه با کمترین تعداد واریز:** الگوریتم بهینه می‌گه هر کی باید به کی چقدر بزنه (حداکثر n−1 واریز)
-- 💾 **ذخیره‌سازی روی سرور:** همه‌ی داده‌ها توی دیتابیس (Prisma) ذخیره می‌شن، نه مرورگر؛ از هر دستگاهی قابل دسترسی‌ان
+- 💾 **ذخیره‌سازی روی سرور:** همه‌ی داده‌ها سمت سرور ذخیره می‌شن، نه مرورگر؛ از هر دستگاهی قابل دسترسی‌ان
 - 📦 **پشتیبان‌گیری/بازیابی JSON** + انتقال خودکار داده‌های نسخه‌ی قدیمی (مرورگری) به سرور
-- 🌗 تم روشن/تاریک، رابط کامل فارسی و راست‌به‌چپ، ریسپانسیو موبایل
+- 🌗 تم روشن/تاریک، رابط کامل فارسی و راست‌به‌چپ (RTL، فونت وزیرمتن، ارقام و تاریخ شمسی)، ریسپانسیو موبایل
 
 ## نکته‌های دقت محاسبات
 
@@ -29,10 +29,32 @@ bun run db:push             # ساخت جداول دیتابیس
 bun run dev                 # http://localhost:3000
 ```
 
+## دیپلوی روی Netlify (بدون هیچ تنظیمی)
+
+1. **ریپو رو توی Netlify import کن** (از همین ریپوی گیت‌هاب).
+2. **دیپلوی کن. همین!** 😎
+
+- `netlify.toml` فرمان بیلد و پلاگین رسمی Next.js نتلیفای (`@netlify/plugin-nextjs`) رو تنظیم کرده — SSR و API Routes به Netlify Functions تبدیل می‌شن.
+- **ذخیره‌سازی داده‌ها خودکاره:** بدون اینکه چیزی تنظیم کنی، داده‌ها به‌صورت ماندگار روی سرورهای نتلیفای (**Netlify Blobs**) ذخیره می‌شن. یعنی دقیقاً همون چیزی که می‌خوای: داده روی سامانه‌ست، نه مرورگر.
+- بیلد هم بدون تنظیم `DATABASE_URL` بدون خطا رد می‌شه.
+
+### دیتابیس اختصاصی (اختیاری)
+
+اگه دیتابیسی جدا از Blobs نتلیفای می‌خوای (مثلاً برای مصارف سنگین یا کوئری‌های SQL)، یه PostgreSQL ابری رایگان از [neon.tech](https://neon.tech) بساز و توی **Site settings → Environment variables** متغیر `DATABASE_URL` رو تنظیم کن:
+
+```
+postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require
+```
+
+وقتی `DATABASE_URL` تنظیم شده باشه، اپ خودکار به‌جای Blobs از همون PostgreSQL استفاده می‌کنه و `scripts/setup-db.mjs` موقع بیلد provider پراسیما رو به `postgresql` تغییر می‌ده و جداول رو می‌سازه.
+
 ## معماری
 
-- **Next.js (App Router) + TypeScript + Tailwind CSS + shadcn/ui**
-- **Prisma ORM** — SQLite برای لوکال، PostgreSQL برای پروداکشن
+- **Next.js (App Router) + TypeScript + Tailwind CSS + shadcn/ui** — رابط کامل فارسی RTL با فونت وزیرمتن
+- **لایه‌ی داده‌ی سروری با انتخاب خودکار بک‌اند** (`src/lib/dang/store-core.ts`):
+  - `DATABASE_URL` تنظیم شده → **Prisma** (SQLite لوکال / PostgreSQL ابری)
+  - اجرا روی نتلیفای بدون تنظیم → **Netlify Blobs** (ذخیره‌سازی ماندگار سرور، بدون کانفیگ)
+  - هر دو مسیر، اعتبارسنجی‌ها و پیام‌های فارسی یکسان دارن (`store-prisma.ts` / `store-blobs.ts`)
 - **API Routes** (همه‌ی اعتبارسنجی و محاسبه‌ی سهم‌ها سمت سرور):
 
 | متد | مسیر | کار |
@@ -46,32 +68,22 @@ bun run dev                 # http://localhost:3000
 | `POST` | `/api/dang/reset` | پاک‌کردن همه‌ی داده‌ها |
 
 - موتور محاسباتی خالص: `src/lib/dang/settlement.ts` (تقسیم، بالانس، تسویه)
-
-## دیپلوی روی Netlify
-
-1. **ریپو رو توی Netlify import کن** (از همین ریپوی گیت‌هاب).
-2. **حتماً یه دیتابیس PostgreSQL ابری بساز** — پیشنهاد: [neon.tech](https://neon.tech) (رایگان) — و رشته‌ی اتصالش رو کپی کن. بدون این مرحله، بیلد با پیام واضح شکست می‌خوره (عمدی؛ چون SQLite روی نتلیفای داده‌ها رو بعد از هر ری‌استارت از دست می‌ده).
-3. توی **Site settings → Environment variables** متغیر `DATABASE_URL` رو تنظیم کن:
-   ```
-   postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require
-   ```
-4. **دیپلوی کن.** بقیه‌ش خودکاره:
-   - `netlify.toml` فرمان بیلد و پلاگین رسمی Next.js نتلیفای (`@netlify/plugin-nextjs`) رو تنظیم کرده — SSR و API Routes به Netlify Functions تبدیل می‌شن.
-   - `scripts/setup-db.mjs` موقع بیلد، بر اساس `DATABASE_URL` به‌طور خودکار provider پراسیما رو به `postgresql` تغییر می‌ده، کلاینت رو تولید می‌کنه و جداول رو با `prisma db push` می‌سازه — نیازی به دست‌کاری کد نیست.
-
-> 💡 اگر بخوای لوکال هم PostgreSQL وصل کنی، همون کار کافیه: `DATABASE_URL` رو توی `.env` با رشته‌ی postgres جایگزین کن و `npm run setup-db` بزن.
+- اگر ارتباط با سرور قطع بشه، اپ به‌جای صفحه‌ی خالی، **بنر خطای فارسی با دکمه‌ی تلاش دوباره** نشون می‌ده.
 
 ## ساختار پروژه
 
 ```
-prisma/schema.prisma        # مدل‌های Member / Expense / ExpenseParticipant
-src/app/page.tsx            # تک‌صفحه‌ی اصلی
-src/app/layout.tsx          # لایوت RTL فارسی + فونت وزیرمتن + تم
-src/app/api/…               # API Routes سروری
-src/lib/dang/settlement.ts  # موتور محاسبات (تقسیم/بالانس/تسویه)
-src/lib/dang/store.tsx      # Provider داده‌ی کلاینت (متصل به API)
-src/lib/dang/backup.ts      # پشتیبان‌گیری/اعتبارسنجی JSON
-src/components/dang/…       # کامپوننت‌های UI
-scripts/setup-db.mjs        # آماده‌سازی دیتابیس موقع بیلد
-netlify.toml                # کانفیگ دیپلوی نتلیفای
+prisma/schema.prisma            # مدل‌های Member / Expense / ExpenseParticipant
+src/app/page.tsx                # تک‌صفحه‌ی اصلی
+src/app/layout.tsx              # لایوت RTL فارسی + فونت وزیرمتن + تم
+src/app/api/…                   # API Routes سروری
+src/lib/dang/store-core.ts      # قرارداد لایه‌ی داده + اعتبارسنجی‌های مشترک
+src/lib/dang/store-prisma.ts    # بک‌اند Prisma (SQLite/PostgreSQL)
+src/lib/dang/store-blobs.ts     # بک‌اند Netlify Blobs (نتلیفای)
+src/lib/dang/settlement.ts      # موتور محاسبات (تقسیم/بالانس/تسویه)
+src/lib/dang/store.tsx          # Provider داده‌ی کلاینت (متصل به API)
+src/lib/dang/backup.ts          # پشتیبان‌گیری/اعتبارسنجی JSON
+src/components/dang/…           # کامپوننت‌های UI
+scripts/setup-db.mjs            # آماده‌سازی دیتابیس موقع بیلد
+netlify.toml                    # کانفیگ دیپلوی نتلیفای
 ```

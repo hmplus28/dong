@@ -7,6 +7,8 @@ import {
   HandCoins,
   Loader2,
   ReceiptText,
+  RefreshCw,
+  TriangleAlert,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -47,6 +49,8 @@ export function DangApp() {
     members,
     expenses,
     loading,
+    loadError,
+    reload,
     legacyData,
     importLegacy,
     dismissLegacy,
@@ -76,6 +80,17 @@ export function DangApp() {
       balances.reduce((sum, b) => sum + (b.balance < 0 ? -b.balance : 0), 0),
     [balances]
   );
+  const [retrying, setRetrying] = useState(false);
+
+  async function handleRetry() {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await reload();
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
@@ -124,6 +139,39 @@ export function DangApp() {
           </div>
         ) : (
           <>
+            {loadError && (
+              <div
+                role="alert"
+                className="flex flex-col items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="flex items-start gap-2.5">
+                  <TriangleAlert className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <div>
+                    <p className="text-sm font-bold">
+                      داده‌ها از سرور گرفته نشد
+                    </p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                      {loadError}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRetry}
+                  disabled={retrying}
+                  className="shrink-0"
+                >
+                  {retrying ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4" />
+                  )}
+                  تلاش دوباره
+                </Button>
+              </div>
+            )}
+
             <SummaryCards
               totalAmount={totalAmount}
               expenseCount={expenses.length}

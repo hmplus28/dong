@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { db } from "@/lib/db";
+import { getDataStore, storeErrorResponse } from "@/lib/dang/server";
 
 /** پاک‌کردن کل داده‌ها (اعضا و هزینه‌ها) */
 export async function POST() {
-  await db.$transaction([
-    db.expenseParticipant.deleteMany({}),
-    db.expense.deleteMany({}),
-    db.member.deleteMany({}),
-  ]);
-  return NextResponse.json({ ok: true });
+  try {
+    const store = await getDataStore();
+    await store.resetAll();
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return storeErrorResponse(err);
+  }
 }

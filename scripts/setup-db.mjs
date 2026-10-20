@@ -4,11 +4,11 @@
  *
  * - اگر DATABASE_URL با postgres:// یا postgresql:// شروع بشه، provider
  *   اسکیمای Prisma به‌طور خودکار به postgresql تغییر می‌کنه (مناسب دیتابیس
- *   ابری مثل Neon برای دیپلوی روی نتلیفای).
- * - اگر file:// باشه، همون SQLite لوکال می‌مونه.
+ *   ابری مثل Neon).
+ * - اگر تنظیم نشده باشه، بیلد «نه» شکست می‌خوره: پیش‌فرض SQLite لوکال
+ *   استفاده می‌شه. روی نتلیفای هم ذخیره‌سازی داده‌ها به‌صورت خودکار از
+ *   Netlify Blobs (سرور نتلیفای) انجام می‌شه، پس هیچ تنظیم اجباری لازم نیست.
  * - کلاینت Prisma تولید و اسکیما روی دیتابیس اعمال می‌شه (db push).
- * - اگر DATABASE_URL اصلاً تنظیم نشده باشه، بیلد با پیام واضح شکست می‌خوره
- *   تا اشتباهی نسازم که داده‌ها جایی ذخیره نشن.
  */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -18,17 +18,20 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const schemaPath = path.join(root, "prisma", "schema.prisma");
+const defaultSqliteUrl = "file:" + path.join(root, "db", "custom.db");
+
+const hasUrl = Boolean(process.env.DATABASE_URL);
+if (!hasUrl) {
+  // بیلد نباید به‌خاطر نبودِ DATABASE_URL بمیره؛ روی نتلیفای زمان اجرا از
+  // Netlify Blobs استفاده می‌شه و اینجا فقط برای تولید کلاینت Prismaه.
+  process.env.DATABASE_URL = defaultSqliteUrl;
+  console.log("⚠ DATABASE_URL تنظیم نشده؛ برای بیلد از SQLite لوکال استفاده می‌شه.");
+  console.log("  • روی نتلیفای: ذخیره‌سازی داده‌ها خودکار از طریق Netlify Blobs انجام می‌شه (بدون تنظیم).");
+  console.log("  • اگه دیتابیس اختصاصی PostgreSQL می‌خوای (مثل neon.tech)،");
+  console.log("    متغیر DATABASE_URL رو توی Site settings → Environment variables تنظیم کن.");
+}
 
 const url = process.env.DATABASE_URL ?? "";
-
-if (!url) {
-  console.error("✖ متغیر DATABASE_URL تنظیم نشده!");
-  console.error("  • روی نتلیفای: Site settings → Environment variables");
-  console.error("    متغیر DATABASE_URL رو با رشته‌ی اتصال PostgreSQL (مثل neon.tech) تنظیم کن.");
-  console.error("    نمونه: postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require");
-  console.error("  • لوکال: از فایل .env.example یه .env بساز.");
-  process.exit(1);
-}
 
 const wantProvider =
   url.startsWith("postgres://") || url.startsWith("postgresql://")
@@ -54,9 +57,6 @@ if (currentProvider !== wantProvider) {
 
 if (wantProvider === "sqlite") {
   mkdirSync(path.join(root, "db"), { recursive: true });
-  console.log("⚠ توجه: SQLite فقط برای اجرای لوکاله؛ روی سرورهای بدون دیسک");
-  console.log("  پایدار (مثل نتلیفای) داده‌ها بعد از ری‌استارت پاک می‌شن.");
-  console.log("  برای دیپلوی واقعی، یه PostgreSQL ابری (مثل neon.tech) وصل کن.");
 }
 
 function run(cmd, args) {
